@@ -25,15 +25,35 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(m);
 }
 
+func db() (db *sql.DB){
+	db, err := sql.Open("mysql", "root:root@/go_meter_server");
+
+	checkErr(err);
+
+	return db
+}
+
 func collectionListHandler(w http.ResponseWriter, r *http.Request) {
 
-	data := struct {
-		Handler string
-	}{
-		"collectionListHandler",
+	rows, err := db().Query("SELECT id, name, icon FROM collection");
+
+	checkErr(err);
+
+	defer rows.Close();
+
+	collections := make([]*Collection, 0);
+
+	for rows.Next() {
+		collection := new(Collection);
+		err := rows.Scan(&collection.Id, &collection.Name, &collection.Icon);
+
+		checkErr(err);
+
+		collections = append(collections, collection);
 	}
 
-	json.NewEncoder(w).Encode(data);
+	w.Header().Add("Content-type", "application/json");
+	json.NewEncoder(w).Encode(collections);
 }
 
 func collectionDetailHandler(w http.ResponseWriter, r *http.Request) {
