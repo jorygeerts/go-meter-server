@@ -7,35 +7,16 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"regexp"
+	"flag"
 )
 
-func handler(w http.ResponseWriter, r *http.Request) {
-
-	db, err := sql.Open("mysql", "root:root@/go_meter_server");
-
-	checkErr(err);
-
-	_, err2 := db.Exec("INSERT INTO collection (name, icon) VALUES ('Electra (laag)', ''), ('Electra (hoog)', ''	), ('Gas', '')");
-	checkErr(err2);
-
-	c := Collection{1, "Electra (laag)", ""};
-	m := Measurement{Collection: c, Id:1, Value:200};
-
-	w.Header().Add("Content-type", "application/json");
-	json.NewEncoder(w).Encode(m);
+type Meter struct {
+	db *sql.DB
 }
 
-func db() (db *sql.DB){
-	db, err := sql.Open("mysql", "root:root@/go_meter_server");
+func (meter *Meter) collectionListHandler(w http.ResponseWriter, r *http.Request) {
 
-	checkErr(err);
-
-	return db
-}
-
-func collectionListHandler(w http.ResponseWriter, r *http.Request) {
-
-	rows, err := db().Query("SELECT id, name, icon FROM collection");
+	rows, err := meter.db.Query("SELECT id, name, icon FROM collection");
 
 	checkErr(err);
 
@@ -56,7 +37,7 @@ func collectionListHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(collections);
 }
 
-func collectionDetailHandler(w http.ResponseWriter, r *http.Request) {
+func (meter *Meter) collectionDetailHandler(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Handler string
 	}{
@@ -66,7 +47,7 @@ func collectionDetailHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data);
 }
 
-func measurementDetailHandler(w http.ResponseWriter, r *http.Request) {
+func (meter *Meter) measurementDetailHandler(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Handler string
 	}{
@@ -83,11 +64,23 @@ func checkErr(err error) {
 }
 
 func main() {
+
+	dsnPtr := flag.String("db", "", "-db=user:password@/database");
+
+	flag.Parse();
+
+	db, err := sql.Open("mysql", *dsnPtr);
+
+	checkErr(err);
+
+	meter := Meter{db: db};
+
+
 	h := RegexpHandler{};
 
-	h.HandleFunc(regexp.MustCompile("^/([a-z0-9]+)/([0-9]{4})/([0-9]{2})/([0-9]{2})$"), measurementDetailHandler)
-	h.HandleFunc(regexp.MustCompile("^/([a-z0-9]+)$"), collectionDetailHandler)
-	h.HandleFunc(regexp.MustCompile("/"), collectionListHandler)
+	h.HandleFunc(regexp.MustCompile("^/([a-z0-9]+)/([0-9]{4})/([0-9]{2})/([0-9]{2})$"), meter.measurementDetailHandler)
+	h.HandleFunc(regexp.MustCompile("^/([a-z0-9]+)$"), meter.collectionDetailHandler)
+	h.HandleFunc(regexp.MustCompile("/"), meter.collectionListHandler)
 
 	http.Handle("/", &h)
 
